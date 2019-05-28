@@ -104,45 +104,42 @@ func textAsBlob(src string, underReplace bool) string {
 
 func (gc *GoCassa) findIDInFQTable(objType string, uid string) bool {
 	var key, column1, value string
-	// query := `SELECT key, column1, value FROM obj_fq_name_table WHERE key = ` + textAsBlob(objType, true)
-	query := `SELECT key, column1, value FROM obj_fq_name_table`
-	// fmt.Println(objType, textAsBlob(objType, true), uid, query)
+	var query string
+	if len(objType) == 0 {
+		query = `SELECT key, column1, value FROM obj_fq_name_table`
+	} else {
+		query = `SELECT key, column1, value FROM obj_fq_name_table WHERE key = ` + textAsBlob(objType, true)
+	}
 	iter := gc.session.Query(query).Iter()
 	for iter.Scan(&key, &column1, &value) {
 		if strings.Contains(column1, uid) {
 			return true
 		}
 	}
-	// fmt.Println("NOT IN:", objType, uid)
 	return false
 }
 
 func (gc *GoCassa) checkAllBackRefs() {
 	fmt.Println("Checking back reference for all objects")
 	var key, column1, value string
-
 	find := "backref"
 	query := `SELECT key, column1, value FROM obj_uuid_table`
 	iter := gc.session.Query(query).Iter()
 	for iter.Scan(&key, &column1, &value) {
-		if strings.Contains(column1, find) {
+		if strings.HasPrefix(column1, find) {
 			record := strings.Split(column1, ":")
-			if len(record) >= 2 {
-				if !gc.findIDInFQTable(record[len(record)-2 : len(record)-1][0], record[len(record)-1:][0]) {
-					fmt.Println("NOT FOUND record in fq_name_table for:", record[len(record)-1:], " based on: ", column1, "Source object: ", key)
-					if len(gc.GetInfoFromID(record[len(record)-1:][0])) == 0 {
-						fmt.Println("!!!! OBJECT NOT FOUND at all:", record[len(record)-1:])
-					}
+			if !gc.findIDInFQTable(record[1], record[2]) {
+				fmt.Println("NOT FOUND object definition in fq_name_table for:", record[2], "as type: ", record[1], " based on: ", column1, "Source object of backref: ", key)
+				if len(gc.GetInfoFromID(record[2])) == 0 {
+					fmt.Println("OBJECT ", record[2], "hasn't defined attributes at all")
 				}
-			} else {
-				fmt.Printf("Weird records: %v", record)
 			}
 		}
 	}
 	if err := iter.Close(); err != nil {
 		log.Fatal("ERROR: ", err)
 	}
-	fmt.Println("DONE")
+	fmt.Printf("DONE %d records were checked\n", iter.NumRows())
 }
 
 // checkBackRefsFor will find all records which contains backrefs of ID
@@ -153,22 +150,59 @@ func (gc *GoCassa) checkBackRefsFor(id string) {
 	find := "backref"
 	query := `SELECT key, column1, value FROM obj_uuid_table`
 	iter := gc.session.Query(query).Iter()
+	cntBr := 0
 	for iter.Scan(&key, &column1, &value) {
-		if strings.Contains(column1, find) {
+		if strings.HasPrefix(column1, find) && strings.Contains(column1, id) {
+			fmt.Printf("key: %s  value: %s \n", key, column1)
+			cntBr = cntBr + 1
 			record := strings.Split(column1, ":")
-			if len(record) >= 2 {
-				if !gc.findIDInFQTable(record[len(record)-2 : len(record)-1][0], record[len(record)-1:][0]) {
-					fmt.Println("NOT FOUND record in fq_name_table for:", record[len(record)-1:][0], " based on: ", column1, "Source object: ", key)
-					if len(gc.GetInfoFromID(record[len(record)-1:][0])) == 0 {
-						fmt.Println("!!!! OBJECT NOT FOUND at all:", record[len(record)-1:][0])
-					}
-				}
+			if !gc.findIDInFQTable(record[1], record[2]) {
+				fmt.Println("NOT FOUND record in fq_name_table for:", record[2], " as type ", record[1], " based on: ", column1, "Source object: ", key)
 			}
 		}
 	}
 	if err := iter.Close(); err != nil {
 		log.Fatal("ERROR: ", err)
 	}
+	fmt.Printf("Backrefs count: %d\n", cntBr)
+	fmt.Println("DONE")
+}
+
+func (gc *GoCassa) deleteBackRefsRecord(keyIn string, column1In string) {
+	var key, column1, value string
+	query := `SELECT key, column1, value FROM obj_uuid_table WHERE key = ` + textAsBlob(keyIn, false) + ` and column1 = ` + textAsBlob(column1In, false)
+	fmt.Println(query)
+	iter := gc.session.Query(query).Iter()
+	for iter.Scan(&key, &column1, &value) {
+		fmt.Printf("Will be delete -> key: %s  value: %s \n", key, column1)
+	}
+	if err := iter.Close(); err != nil {
+		log.Fatal("ERROR: ", err)
+	}
+}
+
+// clearBackRefsFor will find all records which contains backrefs of ID
+func (gc *GoCassa) clearBackRefsFor(id string) {
+	fmt.Printf("Check if object %s exists \n", id)
+	var key, column1, value string
+	if gc.findIDInFQTable("", id) {
+		fmt.Println("Object exists, backrefs cannot be deleted")
+		//return
+	}
+	find := "backref"
+	query := `SELECT key, column1, value FROM obj_uuid_table`
+	iter := gc.session.Query(query).Iter()
+	cntBr := 0
+	for iter.Scan(&key, &column1, &value) {
+		if strings.HasPrefix(column1, find) && strings.Contains(column1, id) {
+			gc.deleteBackRefsRecord(key, column1)
+			cntBr = cntBr + 1
+		}
+	}
+	if err := iter.Close(); err != nil {
+		log.Fatal("ERROR: ", err)
+	}
+	fmt.Printf("Number of deleted backrefs: %d\n", cntBr)
 	fmt.Println("DONE")
 }
 
@@ -204,9 +238,13 @@ func main() {
 		fmt.Println("INFO for id: ", args[1])
 		PrintMap(gc.GetInfoFromID(args[1]))
 	case "check-backref":
-		gc.checkBackRefsFor(args[1])
-	case "check-all-backref":
-		gc.checkAllBackRefs()
+		if args[1] == "all" {
+			gc.checkAllBackRefs()
+		} else {
+			gc.checkBackRefsFor(args[1])
+		}
+	case "clear-backref":
+		gc.clearBackRefsFor(args[1])
 	default:
 		fmt.Println("\n------> Unknow command: ", args[0])
 		PrintUsage()
@@ -228,9 +266,8 @@ func PrintCmd() {
 	fmt.Println("\t help \t\t\t Print application usage")
 	fmt.Println("\t info <id> \t\t Returns base information about object with <ID>, stored in DB ")
 	fmt.Println("\t fulltext <string> \t Returns all records which contains <string>")
-	fmt.Println("\t check-backref <id>|all \t Check back reference inconsistency for <id> or all ids")
-	fmt.Println("\t check-all-backref |all \t Check back reference inconsistency for <id> or all ids")
-	fmt.Println("\t clear-backref <id>|all \t Fix stale back references for <id> or all ids")
+	fmt.Println("\t check-backref <id>|all \t Check back reference inconsistency to <id> or all ids")
+	fmt.Println("\t clear-backref <id>|all \t Remove back references to <id> if object doesn't exist")
 }
 
 // PrintMap /

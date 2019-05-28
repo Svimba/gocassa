@@ -4,10 +4,9 @@
  Commands:
          help                       Print application usage
          info <id>                  Returns base information about object with <ID>, stored in DB 
-         fulltext <string>          Returns all records which contains <string>
-         check-backref <id>         Check back reference inconsistency for <id> or all ids
-         check-all-backref all      Check back reference inconsistency for <id> or all ids
-
+         fulltext <string>          Returns all records from all tables which contains <string>
+         check-backref <id>|all     Check back reference inconsistency to <id> or all ids
+         clear-backref <id>         Remove back references to <id> if object doesn't exist
 
  Flags:
   -keyspace string
@@ -21,7 +20,7 @@
 Examples:
 ---------
 ```
-$ gocassa --server 10.10.11.10 --port 9042 check-all-backref all
+$ gocassa --server 10.10.11.10 --port 9042 check-backref all
 
 $ gocassa --server 10.10.11.10 --port 9042 check-backref 5434d705-e9b1-430b-889f-8edff31cf62f
 
