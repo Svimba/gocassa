@@ -127,11 +127,15 @@ func (gc *GoCassa) checkAllBackRefs() {
 	for iter.Scan(&key, &column1, &value) {
 		if strings.Contains(column1, find) {
 			record := strings.Split(column1, ":")
-			if !gc.findIDInFQTable(record[1], record[2]) {
-				fmt.Println("NOT FOUND record in fq_name_table for:", record[2], " based on: ", column1, "Source object: ", key)
-				if len(gc.GetInfoFromID(record[2])) == 0 {
-					fmt.Println("!!!! OBJECT NOT FOUND at all:", record[2])
+			if len(record) >= 2 {
+				if !gc.findIDInFQTable(record[len(record)-2 : len(record)-1][0], record[len(record)-1:][0]) {
+					fmt.Println("NOT FOUND record in fq_name_table for:", record[len(record)-1:], " based on: ", column1, "Source object: ", key)
+					if len(gc.GetInfoFromID(record[len(record)-1:][0])) == 0 {
+						fmt.Println("!!!! OBJECT NOT FOUND at all:", record[len(record)-1:])
+					}
 				}
+			} else {
+				fmt.Printf("Weird records: %v", record)
 			}
 		}
 	}
@@ -150,12 +154,14 @@ func (gc *GoCassa) checkBackRefsFor(id string) {
 	query := `SELECT key, column1, value FROM obj_uuid_table`
 	iter := gc.session.Query(query).Iter()
 	for iter.Scan(&key, &column1, &value) {
-		if strings.Contains(column1, find) && strings.Contains(column1, find) {
+		if strings.Contains(column1, find) {
 			record := strings.Split(column1, ":")
-			if !gc.findIDInFQTable(record[1], record[2]) {
-				fmt.Println("NOT FOUND record in fq_name_table for:", record[2], " based on: ", column1, "Source object: ", key)
-				if len(gc.GetInfoFromID(record[2])) == 0 {
-					fmt.Println("!!!! OBJECT NOT FOUND at all:", record[2])
+			if len(record) >= 2 {
+				if !gc.findIDInFQTable(record[len(record)-2 : len(record)-1][0], record[len(record)-1:][0]) {
+					fmt.Println("NOT FOUND record in fq_name_table for:", record[len(record)-1:][0], " based on: ", column1, "Source object: ", key)
+					if len(gc.GetInfoFromID(record[len(record)-1:][0])) == 0 {
+						fmt.Println("!!!! OBJECT NOT FOUND at all:", record[len(record)-1:][0])
+					}
 				}
 			}
 		}
