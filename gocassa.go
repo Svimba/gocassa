@@ -170,11 +170,11 @@ func (gc *GoCassa) checkBackRefsFor(id string) {
 
 func (gc *GoCassa) deleteBackRefsRecord(keyIn string, column1In string) {
 	var key, column1, value string
-	query := `SELECT key, column1, value FROM obj_uuid_table WHERE key = ` + textAsBlob(keyIn, false) + ` and column1 = ` + textAsBlob(column1In, false)
+	query := `DELETE FROM obj_uuid_table WHERE key = ` + textAsBlob(keyIn, false) + ` and column1 = ` + textAsBlob(column1In, false)
 	fmt.Println(query)
 	iter := gc.session.Query(query).Iter()
 	for iter.Scan(&key, &column1, &value) {
-		fmt.Printf("Will be delete -> key: %s  value: %s \n", key, column1)
+		fmt.Printf("Has been delete -> key: %s  value: %s \n", key, column1)
 	}
 	if err := iter.Close(); err != nil {
 		log.Fatal("ERROR: ", err)
@@ -189,6 +189,8 @@ func (gc *GoCassa) clearBackRefsFor(id string) {
 		fmt.Println("Object exists, backrefs cannot be deleted")
 		//return
 	}
+	fmt.Println("Object doesn't exist, backrefs can be deleted")
+
 	find := "backref"
 	query := `SELECT key, column1, value FROM obj_uuid_table`
 	iter := gc.session.Query(query).Iter()
