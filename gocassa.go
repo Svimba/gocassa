@@ -208,6 +208,44 @@ func (gc *GoCassa) clearBackRefsFor(id string) {
 	fmt.Println("DONE")
 }
 
+func (gc *GoCassa) deletePropsRecord(keyIn string, column1In string) {
+	var key, column1, value string
+	query := `DELETE FROM obj_uuid_table WHERE key = ` + textAsBlob(keyIn, false) + ` and column1 = ` + textAsBlob(column1In, false)
+	fmt.Println(query)
+	iter := gc.session.Query(query).Iter()
+	for iter.Scan(&key, &column1, &value) {
+		fmt.Printf("Has been delete -> key: %s  value: %s \n", key, column1)
+	}
+	if err := iter.Close(); err != nil {
+		log.Fatal("ERROR: ", err)
+	}
+}
+
+// clearPropsFor will find all records which contains backrefs of ID
+func (gc *GoCassa) clearPropsFor(id string) {
+	fmt.Printf("Check if object %s exists \n", id)
+	var key, column1, value string
+	if gc.findIDInFQTable("", id) {
+		fmt.Println("Object exists, properties cannot be deleted")
+		return
+	}
+	fmt.Println("Object doesn't exist, all properties can be deleted")
+
+	query := `SELECT key, column1, value FROM obj_uuid_table WHERE key = textAsBlob('` + id + `')`
+	iter := gc.session.Query(query).Iter()
+	cnt := 0
+	for iter.Scan(&key, &column1, &value) {
+		cnt++
+		fmt.Println(key, column1, value)
+		gc.deletePropsRecord(key, column1)
+	}
+	if err := iter.Close(); err != nil {
+		log.Fatal("ERROR: ", err)
+	}
+	fmt.Printf("Number of deleted props: %d\n", cnt)
+	fmt.Println("DONE")
+}
+
 func main() {
 
 	serverPtr := flag.String("server", "127.0.0.1", "Server IP address")
@@ -247,6 +285,8 @@ func main() {
 		}
 	case "clear-backref":
 		gc.clearBackRefsFor(args[1])
+	case "clear-props":
+		gc.clearPropsFor(args[1])
 	default:
 		fmt.Println("\n------> Unknow command: ", args[0])
 		PrintUsage()
@@ -270,6 +310,7 @@ func PrintCmd() {
 	fmt.Println("\t fulltext <string> \t Returns all records which contains <string>")
 	fmt.Println("\t check-backref <id>|all \t Check back reference inconsistency to <id> or all ids")
 	fmt.Println("\t clear-backref <id>|all \t Remove back references to <id> if object doesn't exist")
+	fmt.Println("\t clear-props <id> \t Remove properties of <id> only if object doesn't exist")
 }
 
 // PrintMap /
