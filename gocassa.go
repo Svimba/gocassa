@@ -187,7 +187,7 @@ func (gc *GoCassa) clearBackRefsFor(id string) {
 	var key, column1, value string
 	if gc.findIDInFQTable("", id) {
 		fmt.Println("Object exists, backrefs cannot be deleted")
-		//return
+		return
 	}
 	fmt.Println("Object doesn't exist, backrefs can be deleted")
 
